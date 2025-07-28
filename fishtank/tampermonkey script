@@ -1,0 +1,505 @@
+// ==UserScript==
+// @name         Fishtank.live Ultimate Hacker Upgrades
+// @namespace    http://tampermonkey.net/
+// @version      2.1
+// @description  Combined hacker theme upgrades with spam filter, message reader, chat toggle, Grizzway Tools (partial), Unclaimed Item Highlighter (partial), and more for fishtank.live
+// @author       Grok + Community
+// @match        https://*.fishtank.live/*
+// @connect      https://api.fishtank.live
+// @grant        GM_addStyle
+// @grant        GM.xmlHttpRequest
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @run-at       document-idle
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // --- Custom Style Override for Chat Header (Set to Black) ---
+    GM_addStyle(`
+        .chat_header__8kNPS {
+            background-color: #000000 !important;
+        }
+    `);
+
+    // --- Hacker Upgrades Base ---
+    // Auto-Chat Scroller
+    const chat = document.querySelector('.chat_chat__2rdNg');
+    if (chat) {
+        setInterval(() => {
+            if (!chat.matches(':hover')) {
+                chat.scrollTop = chat.scrollHeight;
+            }
+        }, 1000);
+    }
+
+    // Hacker Sound Effects (beep on new messages)
+    const audio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+    const synth = window.speechSynthesis; // For TTS
+    const chatObserver = new MutationObserver((mutations) => {
+        audio.play();
+        updateChatterCount(mutations); // Update counter
+        handleTTS(mutations); // TTS for mentions
+    });
+    if (chat) {
+        chatObserver.observe(chat, { childList: true, subtree: true });
+    }
+
+    // Chatter Counter (unique active users in last 5 min)
+    const activeChatters = new Map(); // username: timestamp
+    const ONLINE_SELECTOR = '.chat_presence__90XuO'; // Adjust if needed
+    let countElement = document.createElement('span');
+    countElement.id = 'active-count';
+    countElement.style.color = '#00FF00';
+    countElement.style.fontWeight = 'bold';
+    countElement.textContent = '[ACTIVE: 0]';
+
+    const onlineElement = document.querySelector(ONLINE_SELECTOR);
+    if (onlineElement && onlineElement.textContent.includes('ONLINE')) {
+        onlineElement.appendChild(countElement);
+    }
+
+    function updateChatterCount(mutations) {
+        const now = Date.now();
+        mutations.forEach(mutation => {
+            if (mutation.addedNodes) {
+                mutation.addedNodes.forEach(node => {
+                    if (node.querySelector) {
+                        const username = node.querySelector('.chat-message-default_user__uVNvH'); // Updated
+                        if (username) {
+                            activeChatters.set(username.textContent.trim(), now);
+                        }
+                    }
+                });
+            }
+        });
+
+        // Expire inactive (older than 5 min)
+        for (let [user, time] of activeChatters) {
+            if (now - time > 300000) {
+                activeChatters.delete(user);
+            }
+        }
+
+        countElement.textContent = `[ACTIVE: ${activeChatters.size}]`;
+        updateHighlights();
+    }
+
+    // User Watch List (double-click username to toggle highlight)
+    const watchedUsers = new Set();
+    chat.addEventListener('dblclick', (e) => {
+        const usernameElem = e.target.closest('.chat-message-default_user__uVNvH');
+        if (usernameElem) {
+            const user = usernameElem.textContent.trim();
+            if (watchedUsers.has(user)) {
+                watchedUsers.delete(user);
+            } else {
+                watchedUsers.add(user);
+            }
+            updateHighlights();
+        }
+    });
+
+    function updateHighlights() {
+        chat.querySelectorAll('.chat-message-default_message__xxx').forEach(msg => {
+            const userElem = msg.querySelector('.chat-message-default_user__uVNvH');
+            const user = userElem ? userElem.textContent.trim() : '';
+            msg.style.background = watchedUsers.has(user) ? '#330000' : '';
+        });
+    }
+
+    // Chat Filter Button (toggle system msgs)
+    const filterButton = document.createElement('button');
+    filterButton.textContent = 'Toggle System Msgs';
+    filterButton.style.position = 'fixed';
+    filterButton.style.bottom = '10px';
+    filterButton.style.right = '10px';
+    filterButton.style.background = '#FF0000';
+    filterButton.style.color = '#000';
+    filterButton.style.border = 'none';
+    filterButton.style.padding = '5px';
+    filterButton.style.cursor = 'pointer';
+    filterButton.onclick = () => {
+        document.querySelectorAll('.chat-message-default_system__punctuation').forEach(msg => {
+            msg.style.display = msg.style.display === 'none' ? '' : 'none';
+        });
+    };
+    document.body.appendChild(filterButton);
+
+    // --- Integrated Chat Spam Filter ---
+    const CONSECUTIVE_LIMIT = 4;
+    let showFiltered = false;
+
+    function filterRepeatedChars(text) {
+        return text.replace(/(\w)\1{3,}/g, (match, char) => char.repeat(CONSECUTIVE_LIMIT));
+    }
+
+    function filterRepeatedWords(text) {
+        const words = text.split(/\s+/);
+        const seen = new Set();
+        const result = [];
+
+        for (const word of words) {
+            const lower = word.toLowerCase();
+            if (!seen.has(lower)) {
+                seen.add(lower);
+                result.push(word);
+            }
+        }
+        return result.join(' ');
+    }
+
+    function processSpan(span) {
+        if (!span || span.dataset.filteredProcessed === "true") return;
+
+        const original = span.textContent.trim();
+        if (!original) return;
+
+        let filtered = filterRepeatedChars(original);
+        filtered = filterRepeatedWords(filtered);
+
+        const wasModified = original !== filtered;
+
+        if (wasModified) {
+            console.log(`[Filter] Original: "${original}" → Filtered: "${filtered}"`);
+
+            const wrapper = document.createElement("span");
+            wrapper.className = "filtered-spam-message";
+            wrapper.dataset.filteredProcessed = "true";
+            wrapper.textContent = showFiltered ? filtered : filtered.slice(0, 4) + "...";
+            wrapper.title = original;
+
+            span.style.display = "none"; // Hide original visually
+            span.after(wrapper); // Place new filtered span
+        }
+    }
+
+    const spamObserver = new MutationObserver(mutations => {
+        mutations.forEach(m => {
+            m.addedNodes.forEach(node => {
+                if (node.nodeType !== 1) return;
+
+                if (node.tagName === 'SPAN') {
+                    processSpan(node);
+                } else {
+                    node.querySelectorAll('span').forEach(processSpan);
+                }
+            });
+        });
+    });
+
+    if (chat) {
+        spamObserver.observe(chat, { childList: true, subtree: true });
+    }
+
+    function handleSpamToggle(e) {
+        if (e.shiftKey && e.key.toLowerCase() === 't') {
+            showFiltered = !showFiltered;
+            document.querySelectorAll('.filtered-spam-message').forEach(span => {
+                const original = span.title;
+                const display = showFiltered ? original : original.slice(0, 4) + "...";
+                span.textContent = display;
+            });
+            console.log(`[ChatSpamFilter] Filtered messages are now ${showFiltered ? "visible" : "collapsed"}`);
+        }
+    }
+
+    window.addEventListener('keydown', handleSpamToggle);
+
+    // --- Integrated FT.live Message Reader (TTS for Mentions) ---
+    const USERNAME = 'YOUR_USERNAME_HERE'; // Replace with your username
+    const SPEECH_PITCH = 1.0;
+    const SPEECH_RATE = 1.0;
+    const MAX_TTS_QUEUED = 3;
+    const MS_BETWEEN_TTS = 3000;
+    const PREFERRED_VOICES = ['Asilia', 'Aria', 'Google'];
+    const LANGS = ['en-US', 'en-KE'];
+
+    window.playingTTS = false;
+    window.ttsQueue = [];
+
+    function chooseVoice() {
+      const voices = speechSynthesis.getVoices();
+      if (voices.length === 0) {
+        console.log('No TTS voices available.');
+        return null;
+      }
+      let fallback = null;
+      for (let j = 0; j < PREFERRED_VOICES.length; j++) {
+        for (let i = 0; i < voices.length; i++) {
+          const v = voices[i];
+          if (LANGS.indexOf(v.lang) === -1) continue;
+          if (fallback === null) fallback = v;
+
+          if (v.name.includes(PREFERRED_VOICES[j])) {
+            return v;
+          }
+        }
+      }
+      return fallback || voices[0];
+    }
+
+    function speakTextAdvanced(text, forceTTS=false) {
+      if (window.playingTTS && !forceTTS) {
+        if (window.ttsQueue.length >= MAX_TTS_QUEUED) {
+          window.ttsQueue[MAX_TTS_QUEUED-1] = text; // replace last message in queue
+        } else {
+          window.ttsQueue.push(text);
+        }
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = SPEECH_RATE;
+      utterance.pitch = SPEECH_PITCH;
+
+      utterance.voice = chooseVoice();
+      if (utterance.voice === null) return;
+
+      utterance.onend = () => {
+        if (window.ttsQueue.length === 0) {
+          window.playingTTS = false;
+        } else {
+          setTimeout(() => speakTextAdvanced(window.ttsQueue.shift(), true), MS_BETWEEN_TTS);
+        }
+      };
+
+      speechSynthesis.speak(utterance);
+      window.playingTTS = true;
+    }
+
+    function handleTTS(mutations) {
+        mutations.forEach(mutation => {
+            if (mutation.addedNodes) {
+                mutation.addedNodes.forEach(node => {
+                    if (node.textContent && node.textContent.toLowerCase().includes(USERNAME.toLowerCase())) {
+                        let cleanMsg = node.textContent.replaceAll('@' + USERNAME, '').replaceAll(USERNAME, '');
+                        speakTextAdvanced(cleanMsg);
+                    }
+                });
+            }
+        });
+    }
+
+    // --- Integrated Toggle Chat ---
+    function playToggleSound(src) {
+      const audio = document.createElement("audio");
+      audio.style.display = "none";
+      audio.volume = 0.5;
+      audio.src = src;
+      document.body.appendChild(audio);
+
+      audio.onended = () => {
+        audio.remove();
+      };
+      audio.play();
+    }
+
+    function setVisible(className, show) {
+      document.querySelectorAll(className).forEach(el => {
+          el.style.display = show ? '' : 'none';
+          el.style.width = show ? '' : '0px';
+      });
+  }
+
+    function isInputFocused() {
+      const active = document.activeElement;
+      return document.activeElement != null && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
+    }
+
+    let isChatVisible = true;
+
+    document.addEventListener("keydown", (e) => {
+      if ((e.key === 'x' || e.key === 'X') && !isInputFocused() && !e.repeat) {
+        isChatVisible = !isChatVisible;
+        setVisible(".layout_right__x_sAY", isChatVisible);
+        document.querySelector(".layout_layout__5rz87").style["grid-template-columns"] = isChatVisible ? "" : "var(--left-bar-width) calc(100vw - var(--left-bar-width) - 0px - var(--spacing)) 0px";
+        playToggleSound("https://cdn.fishtank.live/sounds/latch-short.wav");
+      }
+    });
+
+    // --- Merged Grizzway Tools (Partial Code; Install full from https://greasyfork.org/en/scripts/530747-grizzway-tools for complete) ---
+    // Note: Fetched code was truncated; this is the available portion. Full script includes more themes and mods.
+    function getCurrentTheme() {
+      return localStorage.getItem("grizzway_theme") || "default";
+    }
+    var STORAGE_KEY = "grizzway-tools-settings";
+    function saveSettings(newSettings = {}) {
+      const existing = loadSettings();
+      const merged = { ...existing, ...newSettings };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+    }
+    function loadSettings() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+      } catch {
+        return {};
+      }
+    }
+
+    var default_default = {
+      name: "Default",
+      author: "Wes",
+      customPingSound: "https://cdn.fishtank.live/sounds/mention.mp3",
+      style: ``
+    };
+
+    var chao_default = {
+      name: "Chao Garden",
+      author: "Grizzway",
+      customPingSound: "https://files.catbox.moe/1qbutz.mp3",
+      style: `
+        /* This is for the site background */
+        body, .layout_layout__5rz87, .select_options__t1ibN {
+            background-image: url('https://images.gamebanana.com/img/ss/mods/5f681fd055666.jpg') !important;
+            background-size: cover !important;
+            background-position: center !important;
+            background-repeat: no-repeat !important;
+        }
+
+        /* This is for the chat background */
+        .chat_chat__2rdNg {
+            background-image: url('https://i.imgur.com/UVjYx1I.gif') !important;
+            background-size: cover !important;
+            background-position: center !important;
+            background-repeat: no-repeat !important;
+        }
+
+        /* This is a lot of stuff that you can split up or remove. */
+        .maejok-input-invalid, .maejok-context-message, .maejok-tts-warning-text,
+        .chat_header__8kNPS, .top-bar_top-bar__X4p2n, .panel_body__O5yBA, .inventory_slots__D4IrC {
+            background-color: limegreen !important;
+            border-color: limegreen !important;
+        }
+
+        /* Header Colors */
+        .panel_header__T2yFW {
+            background-color: darkgreen !important;
+        }
+
+        /* Top Bar stuff again feel free to remove or change */
+        .top-bar_top-bar__X4p2n {
+            box-shadow: none !important;
+        }
+
+        /* Do not remember */
+        .maejok-context-message svg path {
+            fill: black !important;
+        }
+
+        /* Live stream preloaded with opacity for fun */
+        .hls-stream-player_hls-stream-player__BJiGl,
+        .live-stream-player_container__A4sNR,
+        .layout_center__Vsd3b {
+            opacity: 1;
+        }
+
+        /* Poll Footer */
+        .poll_footer__rALdX {
+            background-color: limegreen;
+        }
+
+        /* Poll Vote Button Stuff */
+        .poll_vote__b_NE0 button:disabled:hover {
+            background-color: red !important;
+            color: white !important;
+            border-color: black !important;
+        }
+        .poll_vote__b_NE0 button:hover {
+            background-color: red !important;
+            color: white !important;
+            border-color: black !important;
+        }
+
+        /* TTS and SFX Messages */
+        .chat-message-tts_chat-message-tts__2Jlxi,
+        .chat-message-sfx_chat-message-sfx__OGv6q {
+            border-color: #00ff00 !important;
+            background-color: darkgreen !important;
+            filter: drop-shadow(0 0 2px #00ff00) drop-shadow(0 0 2px #00ff00);
+        }
+        .chat-message-tts_message__sWVCc,
+        .chat-message-sfx_message__d2Rei {
+            -webkit-text-stroke: 2px rgba(0
+        /* (truncated; complete with full install) */
+      `
+    };
+
+    // Apply a theme example (use Chao Garden for testing)
+    const currentTheme = chao_default; // Or switch to default_default
+    GM_addStyle(currentTheme.style);
+    // Add more Grizzway functionality as needed from full script
+
+    // --- Merged Unclaimed Item Highlighter (Partial Code; Install full from https://greasyfork.org/en/scripts/537655-fishtank-live-unclaimed-item-highlighter-profile-item-search for complete) ---
+    // Note: Fetched code was truncated; this is the available portion. Full script includes API calls and highlighting logic.
+    const ALL_ITEMS_API_URL = 'https://api.fishtank.live/v1/items/';
+    const CONSUMED_ITEMS_API_URL_BASE = 'https://api.fishtank.live/v1/items/used/';
+    const HIGHLIGHT_CLASS = 'unconsumed-highlight-userscript';
+    const PROFILE_ITEM_SEARCH_WRAPPER_ID = 'highlighter-profile-search-wrapper';
+    const PROFILE_ITEM_SEARCH_ID = 'highlighter-profile-item-search';
+
+    // Centralized DOM selectors for maintainability
+    const SELECTORS = {
+        PROFILE_ITEMS_CONTAINER: 'div[class*="user-profile-items_user-profile-items"]',
+        PROFILE_ITEMS_GRID: 'div[class*="user-profile-items_items"]',
+        PROFILE_ITEM: 'div[class*="user-profile-items_item"]',
+        PROFILE_ITEM_ICON_IN_GRID: 'img[class*="user-profile-items_icon"]',
+        CHAT_ITEM_POPUP: '[class*="item-card_item-card"]',
+        CHAT_ITEM_POPUP_ICON_DIV: 'div[class*="item-card_icon"]',
+        CHAT_ITEM_POPUP_GRID: '[class*="item-card_grid"]',
+        INVENTORY_SLOTS_CONTAINER: 'div[class*="inventory_slots"]',
+        INVENTORY_ITEM: 'button[class*="inventory-item_inventory-item"]',
+        INVENTORY_ITEM_ICON_CONTAINER: 'div[class*="inventory-item_icon"]',
+        MARKETPLACE_MODAL: 'div[class*="item-market-modal_item-market-modal"]',
+        MARKETPLACE_ITEMS_LIST_CONTAINER: 'div[class*="item-market-modal_items"]',
+        MARKETPLACE_LIST_ITEM: 'div[class*="item-market-modal_market-list-item"]',
+        MARKETPLACE_ITEM_ICON_CONTAINER: 'div[class*="item-market-modal_icon"]',
+        USER_INFO_TOP_BAR: '[class*="top-bar-user_"][data-user-id]',
+    };
+
+    // Cache configuration
+    const CACHE_KEYS = {
+        ALL_ITEMS: 'fishtank_allItemsData_v1.6.0',
+        ALL_ITEMS_TIMESTAMP: 'fishtank_allItemsTimestamp_v1.6.0',
+        ALL_ITEMS_DURATION: 6 * 60 * 60 * 1000, // 6 hours
+        CONSUMED_ITEMS_DURATION: 1 * 60 * 1000, // 1 minute
+    };
+
+    // Global script state
+    let SCRIPT_STATE = {
+        profileId: null,
+        allItemsMapByIcon: null,
+        allItemsMapById: null,
+        consumedItemIds: null,
+        isCoreDataLoading: false,
+        isCoreDataLoaded: false,
+        lastConsumedFetchTime: 0,
+        isMarketplaceVisible: false,
+        lastFetchedMarketItems: null,
+    };
+
+    let observers = {}; // Stores MutationObserver instances
+    let debouncedFunctions = {}; // Stores debounced versions of functions
+
+    // --- STYLES ---
+    // Applies custom CSS for highlighting and the search bar UI.
+    function applyUnclaimedStyles() {
+        if (!document.body && !['complete', 'interactive'].includes(document.readyState)) {
+            return document.addEventListener('DOMContentLoaded', applyUnclaimedStyles);
+        }
+        try {
+            GM_addStyle(`
+                ${SELECTORS.PROFILE_ITEMS_CONTAINER} { position: relative !important; min-height: 60px; }
+                ${SELECTORS.PROFILE_ITEMS_CONTAINER} > ${SELECTORS.PROFILE_ITEMS_GRID} { padding-top: 55px !important; }
+                #${PROFILE_ITEM_SEARCH_WRAPPER_ID} { position: absolute !important; top: 10px; left: 50%; transform: translateX(-50%); width: 40px; height: 40px; border-radius: 20px; background-color: rgba(40, 40, 45, 0.55); display
+                /* (truncated; complete with full install) */
+            `);
+        } catch (e) {
+            console.error('Error applying unclaimed styles:', e);
+        }
+    }
+
+    applyUnclaimedStyles();
+    // Add more Unclaimed functionality as needed from full script (e.g., API fetches using GM.xmlHttpRequest)
+
+})();
