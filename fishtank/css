@@ -1,0 +1,219 @@
+/* Global hacker theme (solid black background, no forced dimensions to allow site scaling) */
+  body, html {
+    background-color: #000000 !important;
+    color: #00FF00 !important;
+    font-family: 'Courier New', monospace !important;
+    border: none !important;
+  }
+
+  /* CRT Scanlines for retro hacker vibe (static overlay, non-intrusive) */
+  body::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: repeating-linear-gradient(to bottom, rgba(0,0,0,0.1) 0px, rgba(0,0,0,0.1) 1px, transparent 1px, transparent 2px);
+    pointer-events: none !important;
+    z-index: 999 !important;
+  }
+
+  /* Add subtle glow to non-chat text */
+  p, span, div, li, a, input, textarea, blockquote:not(.chat_chat__2rdNg *) {
+    text-shadow: 0 0 3px #00FF00 !important;
+  }
+
+  /* Remove glow from entire chat */
+  .chat_chat__2rdNg *,
+  .chat_chat__2rdNg p,
+  .chat_chat__2rdNg span,
+  .chat_chat__2rdNg div {
+    text-shadow: none !important;
+  }
+
+  /* Main layout (no dimension overrides; site handles scaling; pleasing solid border) */
+  .layout_layout__5rz87,
+  .MainPanel_main-panel__imCh9,
+  .live-streams_live-streams-grid__Tp4ah,
+  .live-streams_live-streams__BYV96,
+  .live-streams-auto-mode_live-streams-auto-mode__pE2X {
+    background-color: #000000 !important;
+    border: 1px solid #00FF00 !important;
+  }
+
+  /* Chat box (no forced width/height; site responsive; pleasing solid border; gradient background) */
+  .chat_chat__2rdNg,
+  .Chat_chat__Bdojy {
+    background: linear-gradient(to bottom, #000000, #001a00) !important;
+    border: 1px solid #00FF00 !important;
+    box-shadow: 0 0 10px #00FF00 !important; /* Terminal shadow */
+  }
+
+  /* Command prompt style for chat input */
+  .chat-input_input__jljCU input,
+  .chat-input_chat-input__GAgOF input {
+    padding-left: 15px !important;
+  }
+  .chat-input_input__jljCU input::before,
+  .chat-input_chat-input__GAgOF input::before {
+    content: '> ' !important; /* Hacker prompt prefix */
+    position: absolute !important;
+    left: 5px !important;
+    color: #00FF00 !important;
+  }
+
+  /* Remove green from top bar/clan invite/logo */
+  .top-bar_clan-invite__Gv9N_,
+  .Logo_logo___yD0t,
+  .top-bar_logo__XL0_C {
+    filter: none !important;
+    border: none !important;
+    background: #000000 !important;
+  }
+
+  /* Remove green from bottom chat input/presence */
+  .chat-input_input__jljCU,
+  .chat-input_chat-input__GAgOF,
+  .chat_presence__90XuO,
+  .chat-input_actions__QqSJK {
+    border: none !important;
+    background: #000000 !important;
+    filter: none !important;
+  }
+
+  /* Buttons (red accents, hover transition; hacker tooltips) */
+  .button_button__WqJhY,
+  .Button_small__1CiMC,
+  .Button_button__WqJhY {
+    background-color: #FF0000 !important;
+    color: #000000 !important;
+    border: none !important;
+    text-shadow: none !important;
+    transition: background-color 0.3s ease !important;
+    position: relative !important;
+  }
+
+  .button_button__WqJhY:hover,
+  .Button_small__1CiMC:hover,
+  .Button_button__WqJhY:hover {
+    background-color: #CC0000 !important;
+  }
+
+  /* Hacker-style tooltips on buttons/links */
+  [title], a:hover, .button_button__WqJhY:hover, .Button_small__1CiMC:hover {
+    position: relative !important;
+  }
+  [title]:hover::after, a:hover::after, .button_button__WqJhY:hover::after, .Button_small__1CiMC:hover::after {
+    content: attr(title) !important;
+    position: absolute !important;
+    bottom: 100% !important;
+    left: 0 !important;
+    background: #000000 !important;
+    color: #00FF00 !important;
+    border: 1px solid #00FF00 !important;
+    padding: 5px !important;
+    font-size: 0.8em !important;
+    white-space: nowrap !important;
+    z-index: 1000 !important;
+  }
+
+  /* Panels/lists (no dimension overrides; pleasing solid border; gradient and shadow) */
+  .panel_panel__Tdjid,
+  .live-streams_live-stream__4Q7MX,
+  .UserPanel_user-panel__ZKfKU,
+  .AdditionalLinksPanel_additional-links-panel__Rz5nY,
+  .LiveStreamsList_live-streams-list___Dfsg,
+  .panel_full-height__2dCSF,
+  .panel_no-padding__woODX,
+  .panel_collapsible__7RVbk,
+  .panel_header__T2yFW,
+  .panel_title__7jO54,
+  .panel_subtitle__Jx3Sm,
+  .panel_body__O5yBA {
+    background: linear-gradient(to bottom, #000000, #001a00) !important;
+    color: #00FF00 !important;
+    border: 1px solid #00FF00 !important;
+    box-shadow: 0 0 10px #00FF00 !important;
+  }
+
+  /* Leaderboard text: colors with blinking */
+  .UserPanel_user-panel__ZKfKU ul li:nth-child(3n+1),
+  .UserPanel_user-panel__ZKfKU .leaderboard li:nth-child(3n+1) {
+    color: #FF0000 !important;
+    animation: blink 1s infinite !important;
+  }
+  .UserPanel_user-panel__ZKfKU ul li:nth-child(3n+2),
+  .UserPanel_user-panel__ZKfKU .leaderboard li:nth-child(3n+2) {
+    color: #00FF00 !important;
+    animation: blink 1s infinite !important;
+  }
+  .UserPanel_user-panel__ZKfKU ul li:nth-child(3n+3),
+  .UserPanel_user-panel__ZKfKU .leaderboard li:nth-child(3n+3) {
+    color: #0000FF !important;
+    animation: blink 1s infinite !important;
+  }
+  @keyframes blink {
+    50% { opacity: 0.5; }
+  }
+
+  /* Inputs/links (focus styles; animated typing cursor) */
+  input, textarea {
+    background-color: #000000 !important;
+    color: #00FF00 !important;
+    border: none !important;
+    caret-color: #00FF00 !important;
+    animation: blink-cursor 1s step-end infinite !important;
+  }
+  @keyframes blink-cursor {
+    50% { caret-color: transparent; }
+  }
+
+  input:focus, textarea:focus {
+    outline: 1px solid #00FF00 !important;
+  }
+
+  a {
+    color: #00FF00 !important;
+  }
+
+  a:hover {
+    color: #00CC00 !important;
+    text-decoration: underline !important;
+  }
+
+  /* Images/icons (tint, no green on thumbnails/previews/videos; pixelated for hacker vibe) */
+  img, svg {
+    filter: hue-rotate(90deg) brightness(0.8) !important;
+    image-rendering: pixelated !important; /* Retro pixel effect */
+  }
+
+  .live-streams_live-stream__4Q7MX img,
+  .layout_layout__5rz87 img,
+  .layout_layout__5rz87 video,
+  .LiveStreamsList_live-streams-list___Dfsg img,
+  .MainPanel_main-panel__imCh9 img,
+  .MainPanel_main-panel__imCh9 video,
+  .live-stream-player_close__c_GRv img,
+  .live-stream-player_close__c_GRv video,
+  video, iframe {
+    filter: none !important;
+  }
+
+  /* Hide unwanted elements */
+  .ad-banner, .promo-panel {
+    display: none !important;
+  }
+
+  /* Media queries for enhancements without breaking site scaling */
+  @media (min-width: 1440px) {
+    body, html {
+      font-size: 1.1em !important;
+    }
+  }
+
+  @media (max-width: 768px) {
+    body, html {
+      font-size: 14px !important;
+    }
+  }
